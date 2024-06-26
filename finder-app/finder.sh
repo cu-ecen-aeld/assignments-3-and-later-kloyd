@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #The number of files are X and the number of matching lines are Y
 if [ "$#" != "2" ]; then 
   echo "usage: $0 file findstr";
