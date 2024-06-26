@@ -8,6 +8,6 @@ writer.o: writer.c
 	$(CC) $(CFLAGS) -o writer.o -c writer.c
 
 clean:
-	rm *.o writer
+	rm -f *.o writer
 
 all: writer
