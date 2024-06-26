@@ -103,7 +103,7 @@ cp -a $SYSROOT/lib64/libc.so.6 lib64
 sudo mknod -m 666 dev/null c 1 3
 sudo mknod -m 600 dev/console c 5 1
 # book says mount proc and sysfs
-sudo mount -t proc proc /proc
+# sudo mount -t proc proc /proc
 # sudo mount -t sysfs sysfs /sys
 
 # TODO: Clean and build the writer utility
@@ -128,7 +128,6 @@ cp $FINDER_APP_DIR/autorun-qemu.sh home
 
 find . | cpio -H newc -ov --owner root:root > ../initramfs.cpio
 cd ..
-rm -f initramfs.cpio.gz
 
 gzip initramfs.cpio
 # mkimage -A arm64 -O linux -T ramdisk -d initramfs.cpio.gz uRamdisk
