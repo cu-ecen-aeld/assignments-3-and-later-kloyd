@@ -95,8 +95,11 @@ echo $SYSROOT
 cd ${OUTDIR}/rootfs
 cp -a $SYSROOT/lib/ld-linux-aarch64.so.1 lib
 cp -a $SYSROOT/lib64/libm.so.6 lib64
+cp -a $SYSROOT/lib64/libm.so.6 lib
 cp -a $SYSROOT/lib64/libresolv.so.2 lib64
+cp -a $SYSROOT/lib64/libresolv.so.2 lib
 cp -a $SYSROOT/lib64/libc.so.6 lib64
+cp -a $SYSROOT/lib64/libc.so.6 lib
 
 # TODO: Make device nodes
 sudo mknod -m 666 dev/null c 1 3
