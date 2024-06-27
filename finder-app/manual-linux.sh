@@ -19,7 +19,6 @@ echo "*** CROSS_COMPILE"
 echo $CROSS_COMPILE
 ${CROSS_COMPILE}gcc --version
 
-exit 1
 
 if [ $# -lt 1 ]
 
@@ -100,13 +99,11 @@ ${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "Shared library"
 # TODO: Add library dependencies to rootfs
 echo $SYSROOT
 cd ${OUTDIR}/rootfs
+echo "Copying Library Files"
 cp -a $SYSROOT/lib/ld-linux-aarch64.so.1 lib
 cp -a $SYSROOT/lib64/libm.so.6 lib64
-cp -a $SYSROOT/lib64/libm.so.6 lib
 cp -a $SYSROOT/lib64/libresolv.so.2 lib64
-cp -a $SYSROOT/lib64/libresolv.so.2 lib
 cp -a $SYSROOT/lib64/libc.so.6 lib64
-cp -a $SYSROOT/lib64/libc.so.6 lib
 
 # TODO: Make device nodes
 sudo mknod -m 666 dev/null c 1 3
