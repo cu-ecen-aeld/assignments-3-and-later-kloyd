@@ -13,9 +13,15 @@ FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
 SYSROOT=`${CROSS_COMPILE}gcc -print-sysroot`
+echo "*** SYSROOT"
 echo $SYSROOT
+echo "*** CROSS_COMPILE"
+echo $CROSS_COMPILE
+
+exit 1
 
 if [ $# -lt 1 ]
+
 then
 	echo "Using default directory ${OUTDIR} for output"
 else
