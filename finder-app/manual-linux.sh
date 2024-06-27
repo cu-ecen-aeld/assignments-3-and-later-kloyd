@@ -67,6 +67,7 @@ cd rootfs
 mkdir -p bin dev etc home lib lib64 proc sbin sys tmp usr var
 mkdir -p usr/bin usr/lib usr/sbin
 mkdir -p var/log
+mkdir -p home/conf
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]
 then
@@ -80,13 +81,11 @@ else
 fi
 
 # TODO: Make and install busybox
-    make distclean
-    make defconfig
-    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
-    make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
+make distclean
+make defconfig
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
+make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
-# modules_install target???
-# make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} INSTALL_MOD_PATH=${OUTDIR}/rootfs modules_install
 echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "Shared library"
@@ -115,21 +114,20 @@ make CROSS_COMPILE=${CROSS_COMPILE} all
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
 cd ${OUTDIR}/rootfs
-mkdir -p home/conf
-cp $FINDER_APP_DIR/writer home
-cp $FINDER_APP_DIR/finder.sh home
-cp $FINDER_APP_DIR/conf/username.txt home/conf
-cp $FINDER_APP_DIR/conf/assignment.txt home/conf
-cp $FINDER_APP_DIR/finder-test.sh home
-cp $FINDER_APP_DIR/autorun-qemu.sh home
+cp -a $FINDER_APP_DIR/writer home
+cp -a $FINDER_APP_DIR/finder.sh home
+cp -a $FINDER_APP_DIR/conf/username.txt home/conf
+cp -a $FINDER_APP_DIR/conf/assignment.txt home/conf
+cp -a $FINDER_APP_DIR/finder-test.sh home
+cp -a $FINDER_APP_DIR/autorun-qemu.sh home
 
 
 # TODO: Chown the root directory
-
-find . | cpio -H newc -ov --owner root:root > ../initramfs.cpio
-cd ..
-
-gzip initramfs.cpio
-# mkimage -A arm64 -O linux -T ramdisk -d initramfs.cpio.gz uRamdisk
+sudo chown -R root:root *
 
 # TODO: Create initramfs.cpio.gz
+# in ${OUTDIR}/rootfs
+find . | cpio -H newc -ov --owner root:root > ../initramfs.cpio
+cd ..
+gzip initramfs.cpio
+
