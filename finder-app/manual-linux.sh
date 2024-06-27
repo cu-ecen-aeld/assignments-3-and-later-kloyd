@@ -17,6 +17,7 @@ echo "*** SYSROOT"
 echo $SYSROOT
 echo "*** CROSS_COMPILE"
 echo $CROSS_COMPILE
+${CROSS_COMPILE}gcc --version
 
 exit 1
 
