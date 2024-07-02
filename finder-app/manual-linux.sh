@@ -100,10 +100,10 @@ ${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "Shared library"
 echo $SYSROOT
 cd ${OUTDIR}/rootfs
 echo "Copying Library Files"
-cp -a $SYSROOT/lib/ld-linux-aarch64.so.1 lib
-cp -a $SYSROOT/lib64/libm.so.6 lib64
-cp -a $SYSROOT/lib64/libresolv.so.2 lib64
-cp -a $SYSROOT/lib64/libc.so.6 lib64
+cp $SYSROOT/lib/ld-linux-aarch64.so.1 lib
+cp $SYSROOT/lib64/libm.so.6 lib64
+cp $SYSROOT/lib64/libresolv.so.2 lib64
+cp $SYSROOT/lib64/libc.so.6 lib64
 
 # TODO: Make device nodes
 sudo mknod -m 666 dev/null c 1 3
@@ -121,12 +121,12 @@ make CROSS_COMPILE=${CROSS_COMPILE} all
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
 cd ${OUTDIR}/rootfs
-cp -a $FINDER_APP_DIR/writer home
-cp -a $FINDER_APP_DIR/finder.sh home
-cp -a $FINDER_APP_DIR/conf/username.txt home/conf
-cp -a $FINDER_APP_DIR/conf/assignment.txt home/conf
-cp -a $FINDER_APP_DIR/finder-test.sh home
-cp -a $FINDER_APP_DIR/autorun-qemu.sh home
+cp $FINDER_APP_DIR/writer home
+cp $FINDER_APP_DIR/finder.sh home
+cp $FINDER_APP_DIR/conf/username.txt home/conf
+cp $FINDER_APP_DIR/conf/assignment.txt home/conf
+cp $FINDER_APP_DIR/finder-test.sh home
+cp $FINDER_APP_DIR/autorun-qemu.sh home
 
 
 # TODO: Chown the root directory
