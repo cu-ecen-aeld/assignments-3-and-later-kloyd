@@ -34,7 +34,6 @@ void signal_handler(int signal_number) {
 
 int check_for_newline(char * buffer, int len) {
   // 0 for found, 1 for not found.
-  // printf("check for newline:\n");
   int status = 1;
   for(int i= 0; i < len; i++) {
     if (buffer[i] == '\n') {
@@ -42,7 +41,6 @@ int check_for_newline(char * buffer, int len) {
       break;
     }
   }
-  // printf("debug: newline status: %d\n", status);
   return status;
 }
 
@@ -78,7 +76,6 @@ FILE* open_log_file_name(const char* mode) {
 
 void write_log(char *line_input) {
   FILE *logfile;
-  
   // open log file for (a)ppending.
   logfile = open_log_file_name("a");
   if (logfile != NULL) {
@@ -96,21 +93,21 @@ int bind_to_port() {
   struct addrinfo hints;
   struct addrinfo *servinfo;
   int status, socketFD;
-
   // Bind to the PORT on 0.0.0.0 
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
+
   if ((status = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
     syslog (LOG_ERR, "Unable to bind to port %s, error: %d (%m)", PORT, errno);
     return (-1);
   }
+
   socketFD = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
   bind(socketFD, servinfo->ai_addr, servinfo->ai_addrlen);
   freeaddrinfo(servinfo);
   return socketFD;
-
 }
 
 int recv_packet(int serverSocket, char *hostIp, bool signal_continue, bool *conn_in_progress, int line_buffer_size) {
@@ -142,7 +139,6 @@ int recv_packet(int serverSocket, char *hostIp, bool signal_continue, bool *conn
     memset(&buffer, 0, MAXBUFFER);
     status = recv(clientSocket, buffer, MAXBUFFER - 1, flags);
 
-    // printf("debug: status %ld\n", status);
     if (status > 0) {
         if (signal_continue) {
           *conn_in_progress = true;
@@ -262,37 +258,32 @@ int main(int argc, char * argv[]) {
   //  program should fork after ensuring it can bind to port 9000
   if (daemon_mode) {
     fork_result = fork();
+    /* On  success, the PID of the child process is returned in the parent, and 0 is returned in the child.  On failure, -1 is returned
+       in the parent, no child process is created, and errno is set appropriately.*/
   }
 
+  
   // Allocate line buffer.
 
   int line_buffer_size = LINEBUFFSIZE;
   hostIp = malloc(16);
   // "xxx.xxx.xxx.xxx"
   // Figure out background road 
-  // if in daemon mode, let child handle the loop
-  // if in daemon mode, main program should drop out.
-  // if in daemon mode and fork_result == 0, it's child
-  if (daemon_mode && (fork_result == 0)) {
-    conn_in_progress = false;
-    // properly start accepting.
-    // printf("Accepting connection on %s\n", PORT);
-    while (signal_continue) {
-      clientSocket = recv_packet(socketFD, hostIp, signal_continue, &conn_in_progress, line_buffer_size);
-      printf("debug: host ip %s\n", hostIp);
+  if (daemon_mode && fork_result != 0) {
+    // Parent process and it's in background mode -d
+    // fork_result != 0 is parent thread
+    // exit
+    exit(0);
+  }
+  conn_in_progress = false;
+  while (signal_continue) {
+    clientSocket = recv_packet(socketFD, hostIp, signal_continue, &conn_in_progress, line_buffer_size);
+    if (clientSocket > 0) {
       send_log(clientSocket);
       close_socket(&clientSocket, &conn_in_progress, hostIp);
     }
-  } else {
-    conn_in_progress = false;
-    while (signal_continue) {
-      clientSocket = recv_packet(socketFD, hostIp, signal_continue, &conn_in_progress, line_buffer_size);
-      if (clientSocket > 0) {
-        send_log(clientSocket);
-        close_socket(&clientSocket, &conn_in_progress, hostIp);
-      }
-    }
   }
+
   // Program got a SIGINT or SIGTERM, clean up.
   // delete the file from /var/tmp
   status = unlink(log_file_name);
