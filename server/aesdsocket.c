@@ -34,6 +34,7 @@ void signal_handler(int signal_number) {
 
 int check_for_newline(char * buffer, int len) {
   // 0 for found, 1 for not found.
+  // printf("check for newline:\n");
   int status = 1;
   for(int i= 0; i < len; i++) {
     if (buffer[i] == '\n') {
@@ -41,6 +42,7 @@ int check_for_newline(char * buffer, int len) {
       break;
     }
   }
+  // printf("debug: newline status: %d\n", status);
   return status;
 }
 
@@ -74,6 +76,21 @@ FILE* open_log_file_name(const char* mode) {
   }
 }
 
+void write_log(char *line_input) {
+  FILE *logfile;
+  
+  // open log file for (a)ppending.
+  logfile = open_log_file_name("a");
+  if (logfile != NULL) {
+    // write out line_input to file.
+    fprintf(logfile, "%s", line_input);
+    fclose(logfile);
+  } else {
+    // can't open the log file.
+    syslog(LOG_ERR, "Unable to write log file %s", log_file_name);
+    exit(-1);
+  }
+}
 
 int bind_to_port() {
   struct addrinfo hints;
@@ -96,96 +113,84 @@ int bind_to_port() {
 
 }
 
-int recv_packet(char *line_input, int serverSocket, bool signal_continue, bool *conn_in_progress) {
+int recv_packet(int serverSocket, char *hostIp, bool signal_continue, bool *conn_in_progress, int line_buffer_size) {
   socklen_t addr_size;
   struct sockaddr_storage their_addr;
   int line_total, line_len;
   ssize_t status;
   int flags;
-
+  char tempHost[NI_MAXHOST];
   char buffer[MAXBUFFER];
-  char hostip[NI_MAXHOST];
+  char *line_input;
+  int clientSocket;
+
   addr_size = sizeof their_addr;
   flags = 0;
-  int clientSocket = accept(serverSocket, (struct sockaddr *)&their_addr, &addr_size);
-  getnameinfo((struct sockaddr *)&their_addr, addr_size, hostip, sizeof(hostip), NULL, 0, NI_NUMERICHOST);
-  if (signal_continue) {
-    conn_in_progress = true;
-    syslog(LOG_INFO, "Accepted connection from %s", hostip);
-  }
-  // Allocate line buffer.
   line_input = malloc(LINEBUFFSIZE);
-  if (line_input < 0) {
-    syslog(LOG_ERR, "Unable to allocate memory for line buffer.");
-    exit(-1);
-  }
+  clientSocket = 0;
+  // printf("debug: accept\n");
+  if (signal_continue) {
+    clientSocket = accept(serverSocket, (struct sockaddr *)&their_addr, &addr_size);
+    getnameinfo((struct sockaddr *)&their_addr, addr_size, tempHost, sizeof(tempHost), NULL, 0, NI_NUMERICHOST);
+    strcpy(hostIp, tempHost);
+
     // Things need to happen after an accept, clear out line input.
-  line_input[0] = 0;
-  // n.b. line_input won't be NULL on return, but may be null terminated from no receive.
-  line_total = LINEBUFFSIZE;
-  line_len = 0;
-  // start with clear buffer.
-  memset(&buffer, 0, MAXBUFFER);
-  status = recv(clientSocket, buffer, MAXBUFFER - 1, flags);
-  if (status > 0) {
-      // first packet of MAXBUFFER - 1 size, just append to line_input
-      line_len += status;
-      // printf("debug received: %s", buffer);
-      line_input = strcat(line_input, buffer);
-      status = check_for_newline(buffer, MAXBUFFER);
-      // if there was a newline, we're done.
-      // otherwise, grab the next buffer full
-      while (status > 0) {
-        // clear buffer for another packet.
-        memset(&buffer, 0, MAXBUFFER);
-        status = recv(clientSocket, buffer, MAXBUFFER - 1, flags);
-        line_len += status;
-        // printf("debug: %s|", buffer);
-        // printf("debug: received bytes %d, total buffer: %d\n", line_len, line_total);
-        // If we went over the line buffer size, reallocate more space for the line buffer.
-        if (line_len  > line_total) {
-          // realloc line_input
-          line_total += LINEBUFFSIZE;
-          // printf("debug: realloc to %d \n", line_total);
-          char *tmp = realloc(line_input, line_total);
-          if (tmp == NULL) {
-            syslog(LOG_ERR, "Failed to realloc (%m)");
-            exit(-1);
-          }
-          line_input = tmp;
+    line_input[0] = 0;
+    line_total = line_buffer_size;
+    line_len = 0;
+    // start with clear buffer.
+    memset(&buffer, 0, MAXBUFFER);
+    status = recv(clientSocket, buffer, MAXBUFFER - 1, flags);
+
+    // printf("debug: status %ld\n", status);
+    if (status > 0) {
+        if (signal_continue) {
+          *conn_in_progress = true;
+          syslog(LOG_INFO, "Accepted connection from %s", hostIp);
         }
-        // Append to line_input.
+        // first packet of MAXBUFFER - 1 size, just append to line_input
+        line_len += status;
         line_input = strcat(line_input, buffer);
         status = check_for_newline(buffer, MAXBUFFER);
-        // keep going until we get a newline.
-      } 
+        // if there was a newline, we're done.
+        // otherwise, grab the next buffer full
+        while (status > 0) {
+          // clear buffer for another packet.
+          memset(&buffer, 0, MAXBUFFER);
+          status = recv(clientSocket, buffer, MAXBUFFER - 1, flags);
+          line_len += status;
+          // If we went over the line buffer size, reallocate more space for the line buffer.
+          if (line_len  > line_total) {
+            line_total += LINEBUFFSIZE;
+            char *tmp = realloc(line_input, line_total);
+            if (tmp == NULL) {
+              syslog(LOG_ERR, "Failed to realloc (%m)");
+              exit(-1);
+            }
+            line_input = tmp;
+          }
+          // Append to line_input.
+          line_input = strcat(line_input, buffer);
+          status = check_for_newline(buffer, MAXBUFFER);
+          // keep going until we get a newline.
+        } 
+        // we have the entire packet for returning.
+        write_log(line_input);
+        free(line_input);
+    }
 
-      // we have the entire packet for returning.
   }
-
   return clientSocket;
 }
 
-FILE* write_log(char *line_input) {
-  FILE *logfile;
-  // open log file for (a)ppending.
-  logfile = open_log_file_name("a");
-  // write out line_input to file.
-  // printf("line_input: %s", line_input);
-  fprintf(logfile, "%s", line_input);
-  fclose(logfile);
-  free(line_input);
-  return logfile;
-}
-
-send_log(int clientSocket, char *line_input) {
+void send_log(int clientSocket) {
       // open logfile for reading
+      char buffer[MAXBUFFER];
       FILE *logfile = open_log_file_name("r");
       if (logfile == NULL) {
         exit(-1);
       }
-      // read each line
-      // send to client 
+      // read each line and send to client 
       ssize_t readsize, sendsize;
       while ((readsize = fread(buffer, 1, sizeof(buffer) -1 , logfile)) > 0) {
         buffer[readsize] = '\0';
@@ -194,9 +199,16 @@ send_log(int clientSocket, char *line_input) {
           syslog(LOG_WARNING, "Did not send full buffer.");
         }
       }
-      // close logfile
       fclose(logfile);
+}
 
+void close_socket(int *clientSocket, bool *conn_in_progress, char *hostip) {
+    // Conversation complete, close socket and go around again.
+    close(*clientSocket);
+    if (conn_in_progress) {
+      syslog(LOG_INFO, "Closed connection from %s", hostip);
+      conn_in_progress = false;
+    }
 }
 
 int main(int argc, char * argv[]) {
@@ -204,12 +216,12 @@ int main(int argc, char * argv[]) {
   int status, opt;
   int socketFD, clientSocket;
   bool conn_in_progress;
-  char *line_input;   // complete line received.
-  int line_total, line_len;     // where are we at?
   FILE* logfile;
   bool daemon_mode;
   pid_t fork_result;
+  char *hostIp;
 
+  fork_result = -1;
   // Setup syslog first.
   openlog("aesdsocket", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL0);
   syslog(LOG_INFO, "Socket server startup");
@@ -251,29 +263,36 @@ int main(int argc, char * argv[]) {
   if (daemon_mode) {
     fork_result = fork();
   }
-  conn_in_progress = false;
-  // properly start accepting.
-  printf("Accepting connection on %s\n", PORT);
-  if (1) {
-    while (signal_continue) {
-      clientSocket = recv_packet(line_input, signal_continue, &conn_in_progress);
-      logfile = write_log(line_input);
-      send_log(logfile);
-      close_socket();
-    }
-    
-    }  // end of recv() block.
 
-    // Conversation complete, close socket and go around again.
-    // end of recv() block.
-    close(clientSocket);
-    if (conn_in_progress) {
-      syslog(LOG_INFO, "Closed connection from %s", hostip);
-      conn_in_progress = false;
+  // Allocate line buffer.
+
+  int line_buffer_size = LINEBUFFSIZE;
+  hostIp = malloc(16);
+  // "xxx.xxx.xxx.xxx"
+  // Figure out background road 
+  // if in daemon mode, let child handle the loop
+  // if in daemon mode, main program should drop out.
+  // if in daemon mode and fork_result == 0, it's child
+  if (daemon_mode && (fork_result == 0)) {
+    conn_in_progress = false;
+    // properly start accepting.
+    // printf("Accepting connection on %s\n", PORT);
+    while (signal_continue) {
+      clientSocket = recv_packet(socketFD, hostIp, signal_continue, &conn_in_progress, line_buffer_size);
+      printf("debug: host ip %s\n", hostIp);
+      send_log(clientSocket);
+      close_socket(&clientSocket, &conn_in_progress, hostIp);
+    }
+  } else {
+    conn_in_progress = false;
+    while (signal_continue) {
+      clientSocket = recv_packet(socketFD, hostIp, signal_continue, &conn_in_progress, line_buffer_size);
+      if (clientSocket > 0) {
+        send_log(clientSocket);
+        close_socket(&clientSocket, &conn_in_progress, hostIp);
+      }
     }
   }
-  // end daemon / fork test.
-
   // Program got a SIGINT or SIGTERM, clean up.
   // delete the file from /var/tmp
   status = unlink(log_file_name);
@@ -285,5 +304,4 @@ int main(int argc, char * argv[]) {
 
   closelog();
 
-  return 0;
 }
