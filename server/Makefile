@@ -1,5 +1,5 @@
 CC = $(CROSS_COMPILE)gcc
-CFLAGS = -Wall
+CFLAGS = -g -Wall -Werror
 
 aesdsocket: aesdsocket.o
 	$(CC) $(CFLAGS) -o aesdsocket aesdsocket.o

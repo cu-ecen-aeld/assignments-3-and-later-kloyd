@@ -105,14 +105,24 @@ int bind_to_port() {
   }
 
   socketFD = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
-  bind(socketFD, servinfo->ai_addr, servinfo->ai_addrlen);
+  if (setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
+    syslog(LOG_ERR, "Unable to set socket option SO_REUSEADDR, error %m");
+    exit(-1);
+  }
+
+  int result = bind(socketFD, servinfo->ai_addr, servinfo->ai_addrlen);
+  if (result == -1) {
+    // can't bind.
+    syslog(LOG_ERR, "Unable to bind to to port %s, error: %m", PORT);
+    exit(-1);
+  }
   freeaddrinfo(servinfo);
   return socketFD;
 }
 
 int recv_packet(int serverSocket, char *hostIp, bool signal_continue, bool *conn_in_progress, int line_buffer_size) {
   socklen_t addr_size;
-  struct sockaddr_storage their_addr;
+  //struct sockaddr_storage their_addr;
   int line_total, line_len;
   ssize_t status;
   int flags;
@@ -120,17 +130,23 @@ int recv_packet(int serverSocket, char *hostIp, bool signal_continue, bool *conn
   char buffer[MAXBUFFER];
   char *line_input;
   int clientSocket;
-
-  addr_size = sizeof their_addr;
+  struct sockaddr *clientAddr;
+  addr_size = sizeof (struct sockaddr);
+  
   flags = 0;
   line_input = malloc(LINEBUFFSIZE);
+  clientAddr = malloc(addr_size);
+  memset(clientAddr, 0, addr_size);
+  // printf("debug: malloc(1024)\n");
   clientSocket = 0;
   // printf("debug: accept\n");
   if (signal_continue) {
-    clientSocket = accept(serverSocket, (struct sockaddr *)&their_addr, &addr_size);
-    getnameinfo((struct sockaddr *)&their_addr, addr_size, tempHost, sizeof(tempHost), NULL, 0, NI_NUMERICHOST);
+    memset(tempHost, 0, NI_MAXHOST);
+    //(struct sockaddr *)&their_addr
+    clientSocket = accept(serverSocket, clientAddr, &addr_size);
+    getnameinfo(clientAddr, addr_size, tempHost, sizeof(tempHost), NULL, 0, NI_NUMERICHOST);
     strcpy(hostIp, tempHost);
-
+    free(clientAddr);
     // Things need to happen after an accept, clear out line input.
     line_input[0] = 0;
     line_total = line_buffer_size;
@@ -158,12 +174,14 @@ int recv_packet(int serverSocket, char *hostIp, bool signal_continue, bool *conn
           // If we went over the line buffer size, reallocate more space for the line buffer.
           if (line_len  > line_total) {
             line_total += LINEBUFFSIZE;
-            char *tmp = realloc(line_input, line_total);
-            if (tmp == NULL) {
-              syslog(LOG_ERR, "Failed to realloc (%m)");
-              exit(-1);
-            }
-            line_input = tmp;
+            // which one
+            line_input = realloc(line_input, line_total);
+            //char *tmp = realloc(line_input, line_total);
+            //if (tmp == NULL) {
+            //  syslog(LOG_ERR, "Failed to realloc (%m)");
+            //  exit(-1);
+            //}
+            //line_input = tmp;
           }
           // Append to line_input.
           line_input = strcat(line_input, buffer);
@@ -172,11 +190,14 @@ int recv_packet(int serverSocket, char *hostIp, bool signal_continue, bool *conn
         } 
         // we have the entire packet for returning.
         write_log(line_input);
-        free(line_input);
+
     }
 
   }
+  // printf("debug: free %p\n", line_input);
+  free(line_input);
   return clientSocket;
+
 }
 
 void send_log(int clientSocket) {
@@ -266,7 +287,7 @@ int main(int argc, char * argv[]) {
   // Allocate line buffer.
 
   int line_buffer_size = LINEBUFFSIZE;
-  hostIp = malloc(16);
+  
   // "xxx.xxx.xxx.xxx"
   // Figure out background road 
   if (daemon_mode && fork_result != 0) {
@@ -277,13 +298,19 @@ int main(int argc, char * argv[]) {
   }
   conn_in_progress = false;
   while (signal_continue) {
+    hostIp = malloc(16);
+    // printf("debug: malloc(hostIp)\n");
     clientSocket = recv_packet(socketFD, hostIp, signal_continue, &conn_in_progress, line_buffer_size);
     if (clientSocket > 0) {
       send_log(clientSocket);
       close_socket(&clientSocket, &conn_in_progress, hostIp);
     }
+    // printf("debug: free hostIp %p\n", hostIp);
+    free(hostIp);
   }
 
+
+  
   // Program got a SIGINT or SIGTERM, clean up.
   // delete the file from /var/tmp
   status = unlink(log_file_name);
